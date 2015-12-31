@@ -1,0 +1,30 @@
+------
+README
+------
+
+0. Very quick install.
+----------------------
+
+Put "plp.php" file on some directory served by a PHP enabled web server. Be sure
+ to chmod a+r /var/log/mail.log first in order to allow the application to read
+the mail.log file.
+
+Remember also you need GNU/Linux wc/cut/tail commands!
+
+1. Script options.
+------------------
+
+You can modify a few options on the script header:
+
+$DBG = false;
+$TXT_OUTPUT = false; // Set to 'true' for TXT output
+$maillog = '/var/log/mail.log'; // Be sure to chmod a+r /var/log/mail.log first
+$num_lines = 2000; // More than 10000 lines can take long way to complete :(
+
+Also, you can pass a runtime parameter to change $num_lines to parse:
+
+http://yourpage/plp.php?l=5000
+
+This will parse 5000 main.log's lines.
+
+Have a nice day.
