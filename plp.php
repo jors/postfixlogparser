@@ -9,6 +9,7 @@ $DBG = false;
 $TXT_OUTPUT = false; // Set to 'true' for TXT output
 $maillog = '/var/log/mail.log'; // Be sure to chmod a+r /var/log/mail.log first
 $num_lines = 2000; // More than 10000 lines can take long way to complete :(
+$filter = '';
 // ---End USER CONFIGURABLE---
 
 /*************/
@@ -21,7 +22,7 @@ function microtime_float(){
 }
 
 function get_params(){
- global $num_lines, $total_log_num_lines;
+ global $num_lines, $total_log_num_lines, $filter;
  if(isset($_GET))
   if(isset($_GET['l'])){
    if(is_numeric($_GET['l'])){
@@ -30,6 +31,8 @@ function get_params(){
     else $num_lines = $l;
    }
   }
+
+  $filter = isset($_GET['filter'])? $_GET['filter']: "";
 }
 
 /********/
@@ -155,13 +158,17 @@ if($TXT_OUTPUT){
  echo "\nar_others: (".count($ar_others)." entries)\n"; print_r($ar_others); echo "\n";
 } else { // HTML is fun
  // Folding javascripty. Weeeeee!!!
- echo '<head>
+?><html>
+<head>
 <style type="text/css">
 h2 { cursor:pointer; }
 .hb { visibility:hidden; display:none; font-size:small; }
 .red { background-color:red; color:white; font-weigth:bold; }
-.yellow { background-color:yellow; font-weigth:bold; }
+.yellow { background-color:yellow; font-weight:bold; }
+.bold-red-yellow { background-color:yellow; color:red; font-weight:bold; }
 .green { background-color:green; color:white; font-weigth:bold; }
+.cyan{ background-color:#BCFAF1;}
+.green-hl{ background-color:#BDF78D;}
 .link { font-size:x-small; float:right; color:blue; text-decoration:underline; cursor:pointer; }
 .legendtable, .legendtable td { font-size:small; border-spacing:25px; border-collapse: separate }
 .bold { font-weight:bold; background-color:grey; font-style:italic; }
@@ -186,27 +193,39 @@ function showMeHideMe(c)
 
 function changeText(c)
 {
- //var cur_text=document.getElementById(c).innerText;
- //var cur_text_ff=document.getElementById(c).textContent;
- var cur_text=c.innerText;
- var cur_text_ff=c.textContent;
- if(cur_text=="+ Legend" || cur_text_ff=="+ Legend"){
-  //document.getElementById(c).innerText="- Legend";
-  //document.getElementById(c).textContent="- Legend";
-  c.innerText="- Legend";
-  c.textContent="- Legend";
- } else {
-  //document.getElementById(c).innerText="+ Legend";
-  //document.getElementById(c).textContent="+ Legend";
-  c.innerText="+ Legend";
-  c.textContent="+ Legend";
- }
+    if (navigator.userAgent.search("Firefox") > -1) {
+        if (c.textContent.search("[+]") > -1) 
+            c.textContent = c.textContent.replace("+", "-");
+        else
+            c.textContent = c.textContent.replace("-", "+");
+    } else {
+        if (c.innerText.search("[+]") > -1) 
+            c.innerText = c.innerText.replace("+", "-");
+        else
+            c.innerText = c.innerText.replace("-", "+");
+    }
+    return;
 }
-</script>
-</head>';
 
- echo '<body bgcolor="lightgrey"><center><h1>Postfix logparser</h1><span style="font-size:x-small;">(Parsed '.$num_lines.' out of '.$total_log_num_lines.' lines in '.$run_time.' secs)</span><!---span id="legend" class="link" onclick="changeText(\'legend\'); showMeHideMe(\'legendtable\');">+ Legend</span--><span class="link" onclick="changeText(this); showMeHideMe(\'legendtable\');">+ Legend</span>
+</script>
+</head>
+<body bgcolor="lightgrey">
+    <center>
+       <h1>Postfix logparser</h1>
+       <span style="font-size:x-small;"><?= "(Parsed {$num_lines} out of {$total_log_num_lines} lines in {$run_time} secs)" ?></span>
+       <span class="link" onclick="changeText(this); showMeHideMe('legendtable');">+ Legend / Menu</span>
        <div id="legendtable" class="legendtable hb"></br></br>
+        <p>
+            <a href="?l=250">250 Logs</a>   |
+            <a href="?l=500">500 Logs</a>   |
+            <a href="?l=1000">1000 Logs</a> |
+            <a href="">Max Logs</a>
+            <br/>
+            <a href="?filter=bounced">Bounced Only</a>              |
+            <a href="?filter=notsent">Not Sent Only</a>             |
+            <a href="?filter=nohost">DNS/No Host Issues Only</a>    |
+            <form method="GET" action="">Seach For: <input type="text" name="filter" value=""></input></form>
+        </p>
         <table border=1 bgcolor=white cellpadding=3>
          <tr>
           <td class="bold">Single/unpaired connections</td>
@@ -232,8 +251,12 @@ function changeText(c)
           <td class="bold">Others</td>
           <td>Everything else not included in previous categories.</td>
          </tr>
-        </table></br></div><hr></center>';
- if(count($ar_connect)>0){
+        </table>
+        </br>
+       </div>
+       <hr>
+    </center>
+<?php if(count($ar_connect)>0){
   echo '<h2 onclick="showMeHideMe(\'ar_connect\');">Single/unpaired connections ('.count($ar_connect).')</h2><span id="ar_connect" class="hb">';
   foreach($ar_connect as $item) echo htmlentities($item).'</br>';
   echo '</span>';
@@ -244,12 +267,37 @@ function changeText(c)
   echo '</span>';
  }
  if(count($ar_mail_track)>0){
-  echo '<h2 onclick="showMeHideMe(\'ar_mail_track\');">Tracked mails ('.count($ar_mail_track).')</h2><span id="ar_mail_track" class="hb">';
+  echo '<h2 onclick="showMeHideMe(\'ar_mail_track\');">Tracked mails ('.count($ar_mail_track).')</h2><span id="ar_mail_track" class="">';
   foreach($ar_mail_track as $item){
+    switch ($filter) {
+        case 'bounced':
+            if( strpos($item, "status=bounced")===false )
+                continue 2;
+            break;
+
+        case 'nohost':
+            if( strpos($item, "Host or domain name not found")===false )
+                continue 2;
+            break;
+
+        case 'notsent':
+            if( preg_match("/status=(?!sent)/", $item)===0 )
+                continue 2;
+            break;
+
+        default:
+            if( $filter && strpos( iconv_mime_decode($item), $filter)===false )
+                continue 2;
+            break;
+    }
    $clean = str_replace('~', '</br>', htmlentities($item));
    $str = str_replace('removed', '<span class="green">removed</span>', $clean);
-   $str = preg_replace("~dsn=[3-5]\.[0-9]\.[0-9]~", '<span class="yellow">\\0</span>', $str);
-   echo $str.'</br></br>';
+   $str = preg_replace("~dsn=[3-5]\.[0-9]\.[0-9]+~", '<span class="yellow">\\0</span>', $str);
+   $str = preg_replace("~ status=bounced ~", '<span class="bold-red-yellow">\\0</span>', $str);
+   $str = preg_replace("~ status=sent ~", '<span class="green-hl">\\0</span>', $str);
+   $str = preg_replace("~info: header.*?from local;~", '<span class="cyan">\\0</span>', $str);
+   $str = str_replace(' from local;</span>', '</span> from local;', $str);
+   echo iconv_mime_decode($str).'</br></br>';
   }
   echo '</span>';
  }
@@ -273,7 +321,9 @@ function changeText(c)
  if(count($ar_others)){
   echo '<h2 onclick="showMeHideMe(\'ar_others\');">Others ('.count($ar_others).')</h2><span id="ar_others" class="hb">';
   foreach($ar_others as $item) echo htmlentities($item).'</br>';
-  echo '</span></body>';
+  echo '</span>';
  }
 }
 ?>
+</body>
+</html>
